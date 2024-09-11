@@ -1,0 +1,36 @@
+#! /usr/bin/env bash
+
+log=/tmp/.llm_hook.log
+[[ ! -f $log ]] && touch $log
+CMD=$(echo "$@" | tr -d '。' | tr -d ",")
+# CMD=$@
+
+case $CMD in
+
+    "关闭代理")
+        networksetup -setsocksfirewallproxystate Wi-fi off
+        say 'Done'
+        networksetup -getsocksfirewallproxy Wi-fi
+        ;;
+
+    "编译项目")
+        cd /Users/yanyao/Projects/agi/whisper.cpp && say 'building...' && WHISPER_COREML=1 make talk-llama
+        ;;
+
+    "调整音量")
+        osascript -e "set Volume 2.5"
+        say "OK"
+        ;;
+
+    "打开命令行")
+        open -a Terminal.app
+        ;;
+    *)
+        echo $@ "not found" >> $log
+        ;;
+esac
+
+
+# say '$@'
+echo ${CMD} >> $log
+say "完成 ${CMD}"

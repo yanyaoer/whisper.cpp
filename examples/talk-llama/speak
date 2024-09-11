@@ -13,7 +13,7 @@ elif installed piper && installed aplay; then
 
 # for Mac
 elif installed say; then
-  say -v tingting -f $2
+  say -v "Yue (Premium)" -f $2
 
 # Eleven Labs
 elif installed python3 && \

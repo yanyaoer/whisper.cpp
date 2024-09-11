@@ -79,6 +79,8 @@ struct whisper_params {
     std::string prompt      = "";
     std::string fname_out;
     std::string path_session = "";       // path to file for saving/loading model eval state
+    std::string path_hook = "./examples/talk-llama/llm_hook";    // path to execute cmd when match prefix
+    std::string prefix_hook = "ok whisper";
 };
 
 void whisper_print_usage(int argc, char ** argv, const whisper_params & params);
@@ -122,7 +124,9 @@ static bool whisper_params_parse(int argc, char ** argv, whisper_params & params
                 params.prompt.pop_back();
             }
         }
-        else if (arg == "-f"   || arg == "--file")          { params.fname_out     = argv[++i]; }
+        else if (arg == "-f"   || arg == "--file")           { params.fname_out      = argv[++i]; }
+        else if (arg == "-ph"  || arg == "--path-hook")      { params.path_hook      = argv[++i]; }
+        else if (arg == "-pr"  || arg == "--prefix-hook")    { params.prefix_hook    = argv[++i]; }
         else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             whisper_print_usage(argc, argv, params);
@@ -163,6 +167,8 @@ void whisper_print_usage(int /*argc*/, char ** argv, const whisper_params & para
     fprintf(stderr, "  -s FILE,  --speak TEXT     [%-7s] command for TTS\n",                             params.speak.c_str());
     fprintf(stderr, "  -sf FILE, --speak-file     [%-7s] file to pass to TTS\n",                         params.speak_file.c_str());
     fprintf(stderr, "  --prompt-file FNAME        [%-7s] file with custom prompt to start dialog\n",     "");
+    fprintf(stderr, "  --path-hook FNAME          [%-7s] hook with execte cmd when prefix word matched\n",     "");
+    fprintf(stderr, "  --prefix-hook FNAME        [%-7s] match the prefix word to execute hook cmd\n",     "");
     fprintf(stderr, "  --session FNAME                   file to cache model state in (may be large!) (default: none)\n");
     fprintf(stderr, "  -f FNAME, --file FNAME     [%-7s] text output file name\n",                       params.fname_out.c_str());
     fprintf(stderr, "\n");
@@ -247,13 +253,14 @@ static std::vector<std::string> get_words(const std::string &txt) {
     return words;
 }
 
-const std::string k_prompt_whisper = R"(A conversation with a person called {1}.)";
+// const std::string k_prompt_whisper = R"(A conversation with a person called {1}.)";
+const std::string k_prompt_whisper = R"(以下是普通话的句子)";
 
 const std::string k_prompt_llama = R"(Text transcript of a never ending dialog, where {0} interacts with an AI assistant named {1}.
 {1} is helpful, kind, honest, friendly, good at writing and never fails to answer {0}’s requests immediately and with details and precision.
 There are no annotations like (30 seconds passed...) or (to himself), just what {0} and {1} say aloud to each other.
 The transcript only includes text, it does not include markup like HTML and Markdown.
-{1} responds with short and concise answers.
+Must respond in the following locale: zh-cn
 
 {0}{4} Hello, {1}!
 {1}{4} Hello {0}! How may I help you today?
@@ -608,6 +615,22 @@ int main(int argc, char ** argv) {
                     continue;
                 }
 
+                if (!params.prefix_hook.empty() && text_heard.rfind(params.prefix_hook) == 0) {
+                    text_heard.erase(0, params.prefix_hook.length());
+                    text_heard.erase(std::remove_if(text_heard.begin(), text_heard.end(), ispunct), text_heard.end());
+
+                    fprintf(stdout, "%s%s%s", "\033[1m", (text_heard + "  -- exec with hook...\n ").c_str(), "\033[0m");
+                    fflush(stdout);
+
+                    int ret = system((params.path_hook + " '" + text_heard + "'").c_str());
+                    if (ret != 0) {
+                        fprintf(stderr, "%s: failed to execute command\n", __func__);
+                    }
+
+                    audio.clear();
+                    continue;
+                }
+
                 force_speak = false;
 
                 text_heard.insert(0, 1, ' ');
@@ -786,7 +809,7 @@ int main(int argc, char ** argv) {
                     }
                 }
 
-                speak_with_file(params.speak, text_to_speak, params.speak_file, voice_id);
+                //speak_with_file(params.speak, text_to_speak, params.speak_file, voice_id);
 
                 audio.clear();
             }
